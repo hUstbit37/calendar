@@ -62,9 +62,9 @@ export default {
         axios
           .post("api/login", { email: this.email, password: this.password })
           .then(response => {
-            console.log(response.data.user);
+            // console.log(response.data.user);
             if (response.data.token) {
-              this.$router.push("/");
+              // this.$router.push("/");
             }
           });
       });

@@ -62,13 +62,8 @@
               </v-list-item>
             </v-list>
           </v-menu>
-
-          <!-- <v-avatar size="36">
-            <img src="https://cdn.vuetifyjs.com/images/john.jpg" alt="John" />
-          </v-avatar>-->
         </v-toolbar>
       </v-sheet>
-      <!-- <v-date-picker v-if="checkYear" full-width="true" no-title v-model="today" type="month"></v-date-picker> -->
       <v-sheet height="600">
         <v-sheet height="600" v-if="!checkSchedule && !checkYear">
           <v-calendar
@@ -79,16 +74,27 @@
             :event-color="getEventColor"
             :now="today"
             :type="type"
-            @click:event="showEvent"
+            @dbclick:event="showEvent"
             @click:more="viewDay"
             @click:date="viewDay"
-            @click:day="showAddEventOnMonth"
-            @click:time="showAddEventOnMonth"
+            @dbclick:day="showAddEventOnMonth"
+            @dbclick:time="showAddEventOnMonth"
+            @mousedown:event="startDrag"
+            @mousedown:time="startTime"
+            @mousemove:day="mouseMoveDayOnMonth"
+            @mousemove:time="mouseMove"
+            @mouseup:day="endDragMonth"
+            @mouseup:time="endDrag"
             @change="updateRange"
             :weekdays="[1, 2, 3, 4, 5, 6, 0]"
             locale="en"
             :short-weekdays="false"
-          ></v-calendar>
+          >
+            <template #event="{ event, timed}">
+              <div class="v-event-draggable" v-html="getEventHtml(event, timed)"></div>
+              <div v-if="timed" class="v-event-drag-bottom" @mousedown.stop="extendBottom(event)"></div>
+            </template>
+          </v-calendar>
         </v-sheet>
 
         <!-- Modal Add Event -->
@@ -193,6 +199,7 @@
           :events="events"
           v-if="checkSchedule && !checkYear"
         ></Schedule>
+        <v-snackbar v-model="snackbar" width="80px" timeout="2000">Event saved</v-snackbar>
       </v-sheet>
     </v-col>
   </v-row>
@@ -207,6 +214,15 @@ export default {
     Test
   },
   data: () => ({
+    snackbar: false,
+    dragTime: null,
+    dragEvent: null,
+    dragStart: null,
+    lastEvent: "",
+    createEvent: null,
+    createStart: null,
+    extendOriginal: null,
+
     search: "",
     checkSchedule: false,
     checkYear: false,
@@ -285,8 +301,143 @@ export default {
     this.getEvents();
   },
   methods: {
+    toDate(tms) {
+      return typeof tms === "string"
+        ? new Date(tms)
+        : new Date(tms.year, tms.month - 1, tms.day, tms.hour, tms.minute);
+    },
+    toTimestamp(date) {
+      return `${date.getFullYear()}-${date.getMonth() +
+        1}-${date.getDate()} ${date.getHours()}:${date.getMinutes()}`;
+    },
+    extendBottom(event) {
+      console.log("extend");
+      console.log(event);
+      this.createEvent = event;
+      this.createStart = this.toDate(event.start);
+      this.extendOriginal = event.end;
+    },
+    getEventHtml(event, timed) {
+      const cal = this.$refs.calendar;
+      let name = event.name;
+
+      if (timed) {
+        return `<strong>${name} <br></strong>${event.start} - ${event.end}`;
+      } else {
+        return `<strong>${name}</strong> `;
+      }
+    },
+
+    startDrag(e) {
+      // console.log("mousedown event",e);
+      if (e.event && e.timed) {
+        this.dragEvent = e.event;
+        console.log(this.dragEvent);
+        this.dragTime = null;
+        this.extendOriginal = null;
+      } else {
+        this.dragEvent = e.event;
+      }
+    },
+    startTime(e) {
+      // console.log("mousedown time", e);
+      const mouse = this.toDate(e);
+      console.log(mouse);
+      if (this.dragEvent && this.dragTime === null) {
+        const start = this.toDate(this.dragEvent.start);
+
+        this.dragTime = mouse.getTime() - start.getTime();
+      }
+    },
+    mouseMove(tms) {
+      // console.log("mouse Move", tms);
+      if (this.dragEvent && this.dragTime !== null) {
+        const start = this.toDate(this.dragEvent.start);
+        const end = this.toDate(this.dragEvent.end);
+        const duration = end.getTime() - start.getTime();
+        // console.log("Mouse move if", duration);
+        const mouse = this.toDate(tms);
+        const newStartTime = mouse.getTime() - this.dragTime;
+        const newEnd = newStartTime + duration;
+        let t = new Date();
+        t.setTime(newStartTime);
+        this.dragEvent.start = this.toTimestamp(t);
+        t.setTime(newEnd);
+        this.dragEvent.end = this.toTimestamp(t);
+        this.updateEvent(this.dragEvent);
+        setTimeout(() => {
+          this.snackbar = true;
+        }, 1000);
+      } else if (this.createEvent && this.createStart !== null) {
+        const mouse = this.toDate(tms).getTime();
+        console.log("test2", mouse);
+        const mouseRounded = this.roundTime(mouse, false);
+        console.log("test", mouseRounded);
+        const min = Math.min(mouseRounded, this.createStart);
+        // console.log("test2", min);
+        const max = Math.max(mouseRounded, this.createStart);
+
+        this.createEvent.start = this.toTimestamp(new Date(min));
+        this.createEvent.end = this.toTimestamp(new Date(max));
+        this.updateEvent(this.createEvent);
+        // this.snackbar = true;
+        setTimeout(() => {
+          this.snackbar = true;
+        }, 1000);
+      }
+      // console.log(a);
+    },
+    mouseMoveDayOnMonth(tms) {
+      console.log("move Month", this.toDate(tms));
+      if (this.dragEvent) {
+        const start = this.toDate(this.dragEvent.start);
+        const end = this.toDate(this.dragEvent.end);
+        const duration = end.getTime() - start.getTime();
+        console.log("dragEvent.start", this.dragEvent.start);
+        const mouse = this.toDate(tms);
+        mouse.setHours(start.getHours());
+        mouse.setMinutes(start.getMinutes());
+        mouse.setSeconds(start.getSeconds());
+        console.log("mouse", mouse);
+        const newStartTime = mouse.getTime();
+        const newEnd = newStartTime + duration;
+        let t = new Date();
+        t.setTime(newStartTime);
+        this.dragEvent.start = this.toTimestamp(t);
+        t.setTime(newEnd);
+        this.dragEvent.end = this.toTimestamp(t);
+        this.updateEvent(this.dragEvent);
+        setTimeout(() => {
+          this.snackbar = true;
+        }, 1000);
+        //  this.dragEvent.start=
+      }
+    },
+    roundTime(time, down = true) {
+      const roundDownTime = 15 * 60 * 1000; // 15 minutes
+
+      return down
+        ? time - (time % roundDownTime)
+        : time + (roundDownTime - (time % roundDownTime));
+    },
+    endDragMonth(e) {
+      this.dragTime = null;
+      this.dragEvent = null;
+      this.createEvent = null;
+      this.createStart = null;
+      this.extendOriginal = null;
+    },
+    endDrag(e) {
+      console.log("mouseup time endDrag", e);
+      this.dragTime = null;
+      this.dragEvent = null;
+      this.createEvent = null;
+      this.createStart = null;
+      this.extendOriginal = null;
+    },
+
     showAddEventOnMonth(date) {
-      console.log(date.date);
+      // console.log(date.date);
       if (date.time) {
         this.startEvent = date.date + "T" + date.time;
         this.endEvent = date.date + "T" + date.time;
@@ -304,14 +455,10 @@ export default {
     },
     getEvents() {
       axios.get("api/get-event").then(response => {
-        // console.log(response);
         this.events = response.data;
       });
     },
     addEvent() {
-      // this.startEvent = this.startEvent.replace("T", " ");
-      // this.endEvent = this.endEvent.replace("T", " ");
-      // alert(this.startEvent);
       axios
         .post("api/add-event", {
           name: this.name,
@@ -323,7 +470,15 @@ export default {
         })
         .then(response => {
           this.focus = this.startEvent.substr(0, 10);
-          this.getEvents();
+          this.events.push({
+            name: this.name,
+            details: this.details,
+            start: this.startEvent,
+            end: this.endEvent,
+            color: this.color,
+            user_id: 1
+          });
+          // this.getEvents();
 
           this.name = null;
           this.details = null;
@@ -338,8 +493,8 @@ export default {
           check: true,
           name: ev.name,
           details: ev.details,
-          start: ev.startEvent,
-          end: ev.endEvent,
+          start: ev.start,
+          end: ev.end,
           color: ev.color,
           id: ev.id,
           user_id: 1
@@ -356,6 +511,8 @@ export default {
     deleteEvent(id) {
       axios.post("api/delete/" + id).then(response => {
         this.selectedOpen = false;
+        // this.events.forEach(item=>{
+        // })
         this.getEvents();
       });
     },
@@ -366,7 +523,7 @@ export default {
     },
 
     viewDay({ date }) {
-      console.log(date);
+      // console.log(date);
       this.focus = date;
       this.type = "day";
     },
@@ -391,7 +548,7 @@ export default {
 
         this.selectedEvent.start = this.selectedEvent.start.replace(" ", "T");
         this.selectedEvent.end = this.selectedEvent.end.replace(" ", "T");
-        console.log(this.selectedEvent);
+        // console.log(this.selectedEvent);
         this.selectedElement = nativeEvent.target;
         setTimeout(() => (this.selectedOpen = true), 10);
       };
@@ -406,7 +563,6 @@ export default {
       nativeEvent.stopPropagation();
     },
     updateRange({ start, end }) {
-      // You could load events from an outside source (like database) now that we have the start and end dates on the calendar
       this.start = start;
       this.end = end;
     },
@@ -455,8 +611,35 @@ export default {
   }
 };
 </script>
-<style scoped>
-#year {
-  display: flex;
+<style scoped lang="scss">
+.v-event-draggable {
+  padding-left: 6px;
+}
+.v-event-timed {
+  user-select: none;
+  -webkit-user-select: none;
+}
+.v-event-drag-bottom {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 4px;
+  height: 4px;
+  cursor: ns-resize;
+  &::after {
+    display: none;
+    position: absolute;
+    left: 50%;
+    height: 4px;
+    border-top: 1px solid white;
+    border-bottom: 1px solid white;
+    width: 16px;
+    margin-left: -8px;
+    opacity: 0.8;
+    content: "";
+  }
+  &:hover::after {
+    display: block;
+  }
 }
 </style>

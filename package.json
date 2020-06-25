@@ -26,6 +26,7 @@
     },
     "dependencies": {
         "node-sass": "^4.14.1",
+        "v-year-calendar": "^1.0.2",
         "vue-router": "^3.3.2",
         "vuetify": "^2.2.32"
     }

@@ -13,7 +13,8 @@
     <link href="https://fonts.googleapis.com/css?family=Material+Icons" rel="stylesheet">
     <link href="https://cdn.materialdesignicons.com/5.3.45/css/materialdesignicons.min.css" rel="stylesheet">
     <!-- Styles -->
-
+    <!-- install year-calendar -->
+    <script src="https://unpkg.com/v-year-calendar@latest/dist/v-year-calendar.umd.min.js"></script>
     <link href="{{ asset('css/app.css') }}" rel="stylesheet">
 </head>
 

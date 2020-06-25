@@ -1,6 +1,6 @@
 <template>
   <div style="padding-top:0">
-    <v-divider></v-divider>
+    <!-- <v-divider></v-divider>
 
     <div id="list">
       <div v-for="(item,index) in 12" :key="index" id="list-item">
@@ -16,16 +16,22 @@
         ></v-calendar>
       </div>
     </div>
+    <v-divider></v-divider>-->
+    <!-- <v-date-picker no-title prev-icon="false" next-icon :value="today" :reactive="true"></v-date-picker> -->
+
+    <Calendar :data-source="events" @click-day="test" :year="2020" :display-header="true"></Calendar>
   </div>
 </template>
+  
 
 <script>
 // import { db } from "../main";
-
+import Calendar from "v-year-calendar";
 export default {
   props: ["events"],
   data() {
     return {
+      now: 2021,
       today: new Date().toISOString().substr(0, 10),
       focus: [
         "2020-01-01",
@@ -44,13 +50,20 @@ export default {
     };
   },
   created() {
-    console.log(this.focus[2]);
+    console.log(this.today);
   },
   methods: {
     viewDay(e) {
       // console.log(e);
+      // this.$emit("viewDayYear", e);
+    },
+    test(e) {
+      // console.log(e.date.toLocaleDateString());
       this.$emit("viewDayYear", e);
     }
+  },
+  components: {
+    Calendar
   }
 };
 </script>

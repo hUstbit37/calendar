@@ -20,6 +20,7 @@ class CalendarController extends Controller
     public function addEvent(Request $request)
     {
         if ($request->check) {
+            // dd($request->all());
             $s = $request->except(['check']);
             $key = Event::find($request->id);
             $te = $key->update($s);
@@ -39,13 +40,14 @@ class CalendarController extends Controller
     {
         $data = $request->all();
         if (Auth::attempt($data)) {
-            $token = Auth::user()->createToken('my-app-token')->plainTextToken;
+            $token = Auth::user()->createToken('my-app-token');
+            // dd($token->accessToken);
             return response([
                 'token' => $token,
                 'user' => Auth::user()
             ]);
         } else {
-            dd(2);
+            dd('misstake');
         }
     }
 }
