@@ -101,7 +101,7 @@
         <v-dialog width="500" v-model="dialog">
           <v-card>
             <v-container>
-              <v-form @submit.prevent="addEvent">
+              <v-form @submit.prevent="addEventDaily">
                 <v-text-field type="text" label="Event Name" v-model="name"></v-text-field>
                 <v-text-field type="text" label="Event Detail" v-model="details"></v-text-field>
 
@@ -113,6 +113,7 @@
                   v-model="endEvent"
                 ></v-text-field>
                 <v-text-field type="color" label="Color" v-model="color"></v-text-field>
+                <v-checkbox label="Daily" v-model="checkBox"></v-checkbox>
                 <v-btn
                   type="submit"
                   color="primary"
@@ -142,7 +143,7 @@
             <v-card-text>
               <v-form v-if="currentlyEditing !== selectedEvent.id">
                 <b>{{selectedEvent.details}}</b>
-                <v-divider :inset="inset"></v-divider>
+                <v-divider></v-divider>
                 <br />
                 <v-icon>mdi-calendar-text</v-icon>
                 {{selectedEvent.start}}
@@ -191,7 +192,7 @@
           </v-card>
         </v-menu>
 
-        <Test @viewDayYear="viewDayYear" :events="events" v-if="checkYear"></Test>
+        <Year @viewDayYear="viewDayYear" :events="events" v-if="checkYear"></Year>
         <Schedule
           @showAddEventOnSchedule="showAddEventOnSchedule"
           :search="search"
@@ -206,14 +207,16 @@
 </template>
 
 <script>
+import { db } from "../../app.js";
 import Schedule from "./Schedule.vue";
-import Test from "./Test.vue";
+import Year from "./Year.vue";
 export default {
   components: {
     Schedule,
-    Test
+    Year
   },
   data: () => ({
+    checkBox: false,
     snackbar: false,
     dragTime: null,
     dragEvent: null,
@@ -332,7 +335,7 @@ export default {
       // console.log("mousedown event",e);
       if (e.event && e.timed) {
         this.dragEvent = e.event;
-        console.log(this.dragEvent);
+        // console.log(this.dragEvent);
         this.dragTime = null;
         this.extendOriginal = null;
       } else {
@@ -342,7 +345,7 @@ export default {
     startTime(e) {
       // console.log("mousedown time", e);
       const mouse = this.toDate(e);
-      console.log(mouse);
+      // console.log(mouse);
       if (this.dragEvent && this.dragTime === null) {
         const start = this.toDate(this.dragEvent.start);
 
@@ -370,9 +373,9 @@ export default {
         }, 1000);
       } else if (this.createEvent && this.createStart !== null) {
         const mouse = this.toDate(tms).getTime();
-        console.log("test2", mouse);
+        // console.log("test2", mouse);
         const mouseRounded = this.roundTime(mouse, false);
-        console.log("test", mouseRounded);
+        // console.log("test", mouseRounded);
         const min = Math.min(mouseRounded, this.createStart);
         // console.log("test2", min);
         const max = Math.max(mouseRounded, this.createStart);
@@ -388,17 +391,17 @@ export default {
       // console.log(a);
     },
     mouseMoveDayOnMonth(tms) {
-      console.log("move Month", this.toDate(tms));
+      // console.log("move Month", this.toDate(tms));
       if (this.dragEvent) {
         const start = this.toDate(this.dragEvent.start);
         const end = this.toDate(this.dragEvent.end);
         const duration = end.getTime() - start.getTime();
-        console.log("dragEvent.start", this.dragEvent.start);
+        // console.log("dragEvent.start", this.dragEvent.start);
         const mouse = this.toDate(tms);
         mouse.setHours(start.getHours());
         mouse.setMinutes(start.getMinutes());
         mouse.setSeconds(start.getSeconds());
-        console.log("mouse", mouse);
+        // console.log("mouse", mouse);
         const newStartTime = mouse.getTime();
         const newEnd = newStartTime + duration;
         let t = new Date();
@@ -410,7 +413,6 @@ export default {
         setTimeout(() => {
           this.snackbar = true;
         }, 1000);
-        //  this.dragEvent.start=
       }
     },
     roundTime(time, down = true) {
@@ -428,7 +430,7 @@ export default {
       this.extendOriginal = null;
     },
     endDrag(e) {
-      console.log("mouseup time endDrag", e);
+      // console.log("mouseup time endDrag", e);
       this.dragTime = null;
       this.dragEvent = null;
       this.createEvent = null;
@@ -454,67 +456,162 @@ export default {
       this.checkSchedule = false;
     },
     getEvents() {
-      axios.get("api/get-event").then(response => {
-        this.events = response.data;
+      db.collection("calEvent3").onSnapshot(event => {
+        let events = [];
+        event.forEach(doc => {
+          let appData = doc.data();
+          appData.id = doc.id;
+          // console.log(doc.id);
+          events.push(appData);
+        });
+        this.events = events;
+        console.log(this.events);
       });
     },
-    addEvent() {
-      axios
-        .post("api/add-event", {
+    addEventDaily() {
+      this.startEvent = this.startEvent.replace(" ", "T");
+      this.endEvent = this.endEvent.replace(" ", "T");
+      if (!this.checkBox) {
+        this.addOneEvent();
+      } else {
+        let startEventTime = new Date(this.startEvent);
+        let endEventTime = new Date(this.endEvent);
+        let endEventTime1 = endEventTime.getTime();
+        let startEventTime1 = startEventTime.getTime();
+
+        while (startEventTime1 <= endEventTime1) {
+          let start = this.toTimestamp(new Date(startEventTime1));
+          let test = new Date(startEventTime1);
+          test.setHours(endEventTime.getHours());
+          test.setMinutes(endEventTime.getMinutes());
+          test.setSeconds(endEventTime.getSeconds());
+          let end = this.toTimestamp(test);
+          let events = [];
+          startEventTime1 += 86400000;
+          this.events.push({
+            name: this.name,
+            details: this.details,
+            start: start,
+            end: end,
+            color: this.color
+          });
+          db.collection("calEvent3")
+            .add({
+              name: this.name,
+              details: this.details,
+              start: start,
+              end: end,
+              color: this.color
+            })
+            .then(() => {
+              console.log("add done");
+            });
+          // axios.post("api/add-event", {
+          //   name: this.name,
+          //   details: this.details,
+          //   start: start,
+          //   end: end,
+          //   color: this.color,
+          //   user_id: 1
+          // });
+        }
+      }
+    },
+    addOneEvent() {
+      db.collection("calEvent3")
+        .add({
           name: this.name,
           details: this.details,
           start: this.startEvent,
           end: this.endEvent,
-          color: this.color,
-          user_id: 1
+          color: this.color
         })
-        .then(response => {
-          this.focus = this.startEvent.substr(0, 10);
-          this.events.push({
-            name: this.name,
-            details: this.details,
-            start: this.startEvent,
-            end: this.endEvent,
-            color: this.color,
-            user_id: 1
-          });
-          // this.getEvents();
-
-          this.name = null;
-          this.details = null;
-          this.startEvent = null;
-          this.endEvent = null;
-          this.color = "#1976D2";
+        .then(() => {
+          console.log("add done");
         });
+
+      this.name = null;
+      this.details = null;
+      this.startEvent = null;
+      this.endEvent = null;
+      this.color = "#1976D2";
+      // axios
+      //   .post("api/add-event", {
+      //     name: this.name,
+      //     details: this.details,
+      //     start: this.startEvent,
+      //     end: this.endEvent,
+      //     color: this.color,
+      //     user_id: 1
+      //   })
+      //   .then(response => {
+      //     this.focus = this.startEvent.substr(0, 10);
+      //     this.events.push({
+      //       name: this.name,
+      //       details: this.details,
+      //       start: this.startEvent,
+      //       end: this.endEvent,
+      //       color: this.color,
+      //       user_id: 1
+      //     });
+      // this.getEvents();
+      // });
     },
     updateEvent(ev) {
-      axios
-        .post("api/add-event", {
-          check: true,
+      db.collection("calEvent3")
+        .doc(ev.id)
+        .update({
           name: ev.name,
           details: ev.details,
           start: ev.start,
           end: ev.end,
-          color: ev.color,
-          id: ev.id,
-          user_id: 1
+          color: ev.color
         })
-        .then(response => {
+        .then(() => {
+          console.log("update done");
           this.selectedOpen = false;
           this.currentlyEditing = null;
-          // console.log(response.data);
         });
+      // axios
+      //   .post("api/add-event", {
+      //     check: true,
+      //     name: ev.name,
+      //     details: ev.details,
+      //     start: ev.start,
+      //     end: ev.end,
+      //     color: ev.color,
+      //     id: ev.id,
+      //     user_id: 1
+      //   })
+      //   .then(response => {
+      //     this.selectedOpen = false;
+      //     this.currentlyEditing = null;
+      //     // console.log(response.data);
+      //   });
     },
     editEvent(id) {
       this.currentlyEditing = id;
     },
     deleteEvent(id) {
-      axios.post("api/delete/" + id).then(response => {
-        this.selectedOpen = false;
-        // this.events.forEach(item=>{
-        // })
-        this.getEvents();
-      });
+      if (window.confirm("Do you really want to delete?")) {
+        db.collection("calEvent3")
+          .doc(id)
+          .delete()
+          .then(() => {
+            console.log("Document deleted!");
+            this.selectedOpen = false;
+            // this.currentlyEditing = null;
+          })
+          .catch(error => {
+            console.error(error);
+          });
+      }
+      // axios.post("api/delete/" + id).then(response => {
+      //   this.selectedOpen = false;
+      //   // this.events.forEach(item=>{
+      //   // })
+      //   this.getEvents();
+      // });
     },
     showDateTime() {
       this.check = false;
