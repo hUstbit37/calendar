@@ -74,7 +74,7 @@
             :event-color="getEventColor"
             :now="today"
             :type="type"
-            @dbclick:event="showEvent"
+            @click:event="showEvent"
             @click:more="viewDay"
             @click:date="viewDay"
             @dbclick:day="showAddEventOnMonth"
@@ -247,7 +247,22 @@ export default {
     selectedEvent: {},
     selectedElement: null,
     selectedOpen: false,
-    events: [],
+    events: [
+      {
+        name: "event allday",
+        details: "test",
+        start: "2020-07-14",
+        end: "2020-07-14",
+        color: "#1976D2"
+      },
+      {
+        name: "event default",
+        details: "test1",
+        start: "2020-07-14 15:00",
+        end: "2020-07-14 16:00",
+        color: "#1976D2"
+      }
+    ],
 
     name: null,
     details: null,
@@ -309,9 +324,16 @@ export default {
         ? new Date(tms)
         : new Date(tms.year, tms.month - 1, tms.day, tms.hour, tms.minute);
     },
+    pad(num) {
+      if (num < 10) {
+        return "0" + num;
+      }
+      return num;
+    },
     toTimestamp(date) {
-      return `${date.getFullYear()}-${date.getMonth() +
-        1}-${date.getDate()} ${date.getHours()}:${date.getMinutes()}`;
+      return `${date.getFullYear()}-${this.pad(date.getMonth() + 1)}-${this.pad(
+        date.getDate()
+      )} ${this.pad(date.getHours())}:${this.pad(date.getMinutes())}`;
     },
     extendBottom(event) {
       console.log("extend");
@@ -465,6 +487,13 @@ export default {
           events.push(appData);
         });
         this.events = events;
+        this.events.push({
+          name: "event default",
+          details: "test1",
+          start: "2020-07-14",
+          end: "2020-07-14",
+          color: "#1976D2"
+        });
         console.log(this.events);
       });
     },
@@ -506,14 +535,6 @@ export default {
             .then(() => {
               console.log("add done");
             });
-          // axios.post("api/add-event", {
-          //   name: this.name,
-          //   details: this.details,
-          //   start: start,
-          //   end: end,
-          //   color: this.color,
-          //   user_id: 1
-          // });
         }
       }
     },
@@ -535,29 +556,9 @@ export default {
       this.startEvent = null;
       this.endEvent = null;
       this.color = "#1976D2";
-      // axios
-      //   .post("api/add-event", {
-      //     name: this.name,
-      //     details: this.details,
-      //     start: this.startEvent,
-      //     end: this.endEvent,
-      //     color: this.color,
-      //     user_id: 1
-      //   })
-      //   .then(response => {
-      //     this.focus = this.startEvent.substr(0, 10);
-      //     this.events.push({
-      //       name: this.name,
-      //       details: this.details,
-      //       start: this.startEvent,
-      //       end: this.endEvent,
-      //       color: this.color,
-      //       user_id: 1
-      //     });
-      // this.getEvents();
-      // });
     },
     updateEvent(ev) {
+      console.log(ev);
       db.collection("calEvent3")
         .doc(ev.id)
         .update({
@@ -639,7 +640,7 @@ export default {
     },
     showEvent({ nativeEvent, event }) {
       const open = () => {
-        // console.log(nativeEvent.target);
+        console.log(nativeEvent.target);
         this.selectedEvent = event;
         console.log(this.selectedEvent);
 

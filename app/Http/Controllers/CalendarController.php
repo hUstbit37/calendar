@@ -26,8 +26,10 @@ class CalendarController extends Controller
             $te = $key->update($s);
             return $te;
         } else {
-            // dd($request->start);
-            $add = Event::create($request->all());
+            // dd($request);
+            foreach ($request->events as $event) {
+                $add = Event::create($event);
+            }
         }
     }
     public function deleteEvent($id)

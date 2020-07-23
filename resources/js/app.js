@@ -13,7 +13,9 @@ window.Vue = require('vue');
 
 import VueRouter from 'vue-router'
 import Vuetify from 'vuetify'
+
 import firebase from 'firebase/app';
+// import 'firebase/database';
 import 'firebase/firestore';
 import { routes } from './routes.js'
 import App from './App.vue'

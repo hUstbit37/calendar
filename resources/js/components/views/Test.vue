@@ -2,9 +2,10 @@
   <v-row class="fill-height">
     <v-col style="padding-top:0">
       <!-- Thanh toolbar -->
+
       <v-sheet height="64">
         <v-toolbar flat color="white">
-          <v-btn color="primary" dark class="mr-4" @click="dialog = true">
+          <v-btn color="primary" dark class="mr-4" @click="openDialogAddEvent">
             <v-icon color="red">mdi-plus</v-icon>Add Event
           </v-btn>
           <v-btn outlined class="mr-4" @click="setToday">Today</v-btn>
@@ -101,7 +102,7 @@
         <v-dialog width="500" v-model="dialog">
           <v-card>
             <v-container>
-              <v-form @submit.prevent="addEventDaily">
+              <v-form @submit.prevent="addOneEvent">
                 <v-text-field type="text" label="Event Name" v-model="name"></v-text-field>
                 <v-text-field type="text" label="Event Detail" v-model="details"></v-text-field>
 
@@ -113,23 +114,33 @@
                   v-model="endEvent"
                 ></v-text-field>
                 <v-text-field type="color" label="Color" v-model="color"></v-text-field>
-                <v-checkbox label="Daily" v-model="checkBox"></v-checkbox>
                 <v-btn
                   type="submit"
                   color="primary"
                   class="mr-4"
                   @click.stop="dialog = false"
                 >Add Event</v-btn>
+                <v-btn depressed @click="checkMoreAction()">More Action</v-btn>
               </v-form>
             </v-container>
           </v-card>
         </v-dialog>
+
+        <edit-event-dialog
+          v-if="checkMoreActionData"
+          :key="selectedEvent"
+          :selectedEvent="selectedEvent"
+          :checkMoreActionData="checkMoreActionData"
+          @closeEditEventDialog="closeEditEventDialog"
+          @addOrUpdateEvent="addOrUpdateEvent"
+        ></edit-event-dialog>
+
         <!-- Show event and edit -->
         <v-menu
           v-model="selectedOpen"
-          :close-on-content-click="false"
+          min-width="350"
           :activator="selectedElement"
-          offset-x
+          :close-on-content-click="false"
         >
           <v-card color="grey lighten-4" width="350px" flat>
             <v-toolbar :color="selectedEvent.color" dark>
@@ -153,24 +164,6 @@
                 <v-icon>mdi-calendar-text</v-icon>
                 {{selectedEvent.end}}
               </v-form>
-
-              <v-form v-else>
-                <v-text-field type="text" v-model="selectedEvent.name" label="Name"></v-text-field>
-                <v-text-field type="text" v-model="selectedEvent.details" label="Details"></v-text-field>
-                <v-text-field
-                  :value="selectedEvent.start.replace(' ', 'T')"
-                  v-model="selectedEvent.start"
-                  type="datetime-local"
-                  label="Start date"
-                ></v-text-field>
-
-                <v-text-field
-                  :min="selectedEvent.start"
-                  type="datetime-local"
-                  label="End date"
-                  v-model="selectedEvent.end"
-                ></v-text-field>
-              </v-form>
             </v-card-text>
             <v-divider></v-divider>
             <v-card-actions>
@@ -185,9 +178,9 @@
                 <v-icon small>mdi-eyedropper</v-icon>Edit
               </v-btn>
 
-              <v-btn text v-else @click.prevent="updateEvent(selectedEvent)">
+              <!-- <v-btn text v-else @click.prevent="updateEvent(selectedEvent)">
                 <v-icon>mdi-check-circle</v-icon>Ok
-              </v-btn>
+              </v-btn>-->
             </v-card-actions>
           </v-card>
         </v-menu>
@@ -210,13 +203,15 @@
 import { db } from "../../app.js";
 import Schedule from "./Schedule.vue";
 import Year from "./Year.vue";
+import EditEventDialog from "./EditEventDialog.vue";
 export default {
   components: {
     Schedule,
-    Year
+    Year,
+    EditEventDialog
   },
   data: () => ({
-    checkBox: false,
+    checkMoreActionData: false,
     snackbar: false,
     dragTime: null,
     dragEvent: null,
@@ -301,17 +296,36 @@ export default {
       this.showSchedule();
     }
   },
-  // created() {},
+
   methods: {
+    checkMoreAction() {
+      this.checkMoreActionData = true;
+      this.dialog = false;
+    },
     toDate(tms) {
       return typeof tms === "string"
         ? new Date(tms)
         : new Date(tms.year, tms.month - 1, tms.day, tms.hour, tms.minute);
     },
+
+    pad(num) {
+      if (num < 10) {
+        return "0" + num;
+      }
+      return num;
+    },
     toTimestamp(date) {
-      if (date.getMonth() >= 10)
-        return `${date.getFullYear()}-${date.getMonth() +
-          1}-${date.getDate()} ${date.getHours()}:${date.getMinutes()}`;
+      return (
+        date.getUTCFullYear() +
+        "-" +
+        this.pad(date.getUTCMonth() + 1) +
+        "-" +
+        this.pad(date.getUTCDate()) +
+        " " +
+        this.pad(date.getUTCHours() + 7) +
+        ":" +
+        this.pad(date.getUTCMinutes())
+      );
     },
     extendBottom(event) {
       console.log("extend");
@@ -322,7 +336,7 @@ export default {
     },
     getEventHtml(event, timed) {
       const cal = this.$refs.calendar;
-      let name = event.name;
+      let name = event.name ? event.name : "No title";
 
       if (timed) {
         return `<strong>${name} <br></strong>${event.start} - ${event.end}`;
@@ -332,7 +346,6 @@ export default {
     },
 
     startDrag(e) {
-      // console.log("mousedown event",e);
       if (e.event && e.timed) {
         this.dragEvent = e.event;
         // console.log(this.dragEvent);
@@ -364,17 +377,11 @@ export default {
         const newEnd = newStartTime + duration;
         let t = new Date();
         t.setTime(newStartTime);
-        // this.dragEvent.start = this.toTimestamp(t);
-        this.dragEvent.start = t
-          .toISOString()
-          .substr(0, 16)
-          .replace("T", " ");
+        this.dragEvent.start = this.toTimestamp(t);
+
         t.setTime(newEnd);
-        // this.dragEvent.end = this.toTimestamp(t);
-        this.dragEvent.end = t
-          .toISOString()
-          .substr(0, 16)
-          .replace("T", " ");
+        this.dragEvent.end = this.toTimestamp(t);
+        // console.log(this.dragEvent);
         this.updateEvent(this.dragEvent);
         setTimeout(() => {
           this.snackbar = true;
@@ -388,16 +395,9 @@ export default {
         // console.log("test2", min);
         const max = Math.max(mouseRounded, this.createStart);
 
-        this.createEvent.start = new Date(min)
-          .toISOString()
-          .substr(0, 16)
-          .replace("T", " ");
-        this.createEvent.end = new Date(max)
-          .toISOString()
-          .substr(0, 16)
-          .replace("T", " ");
-        // this.createEvent.start = this.toTimestamp(new Date(min));
-        // this.createEvent.end = this.toTimestamp(new Date(max));
+        this.createEvent.start = this.toTimestamp(new Date(min));
+        this.createEvent.end = this.toTimestamp(new Date(max));
+        console.log(this.createEvent);
         this.updateEvent(this.createEvent);
         // this.snackbar = true;
         setTimeout(() => {
@@ -422,17 +422,12 @@ export default {
         const newEnd = newStartTime + duration;
         let t = new Date();
         t.setTime(newStartTime);
-        this.dragEvent.start = t.toISOString().substr(0, 16);
-        this.dragEvent.start = this.dragEvent.start.replace("T", " ");
-        // this.dragEvent.start = this.toTimestamp(t);
-        console.log("drag", this.dragEvent.start);
+        this.dragEvent.start = this.toTimestamp(t);
         t.setTime(newEnd);
-        this.dragEvent.end = t
-          .toISOString()
-          .substr(0, 16)
-          .replace("T", " ");
-        // this.dragEvent.end = this.toTimestamp(t);
+        this.dragEvent.end = this.toTimestamp(t);
+
         this.updateEvent(this.dragEvent);
+
         setTimeout(() => {
           this.snackbar = true;
         }, 1000);
@@ -460,7 +455,6 @@ export default {
       this.createStart = null;
       this.extendOriginal = null;
     },
-
     showAddEventOnMonth(date) {
       // console.log(date.date);
       if (date.time) {
@@ -481,17 +475,8 @@ export default {
     getEvents() {
       console.log("getEvent");
 
-      db.collection("calEvent3").onSnapshot(event => {
-        let events = [
-          {
-            name: "event default",
-            details: "test",
-            start: "2020-07-02T15:00",
-            end: "2020-07-02T16:00",
-            color: "#1976D2",
-            timed: "false"
-          }
-        ];
+      db.collection("calEvent").onSnapshot(event => {
+        let events = [];
         event.forEach(doc => {
           let appData = doc.data();
           appData.id = doc.id;
@@ -499,52 +484,41 @@ export default {
           events.push(appData);
         });
         this.events = events;
-        // console.log(this.events);
+        this.events.push({
+          name: "event default",
+          details: "test1",
+          start: "2020-07-14",
+          end: "2020-07-14",
+          color: "#1976D2"
+        });
+        // console.log("event all", this.events);
       });
     },
-    addEventDaily() {
-      if (!this.checkBox) {
-        // this.startEvent = this.startEvent.replace("T", " ");
-        // this.endEvent = this.endEvent.replace("T", " ");
-        this.addOneEvent();
-      } else {
-        let startEventTime = new Date(this.startEvent);
-        let endEventTime = new Date(this.endEvent);
-        let endEventTime1 = endEventTime.getTime();
-        let startEventTime1 = startEventTime.getTime();
-
-        while (startEventTime1 <= endEventTime1) {
-          let start = new Date(startEventTime1).toISOString().substr(0, 16);
-          let test = new Date(startEventTime1);
-          test.setHours(endEventTime.getHours());
-          test.setMinutes(endEventTime.getMinutes());
-          test.setSeconds(endEventTime.getSeconds());
-          let end = test.toISOString().substr(0, 16);
-          let events = [];
-          startEventTime1 += 86400000;
-          this.events.push({
-            name: this.name,
-            details: this.details,
-            start: start,
-            end: end,
-            color: this.color
-          });
-          db.collection("calEvent3")
+    addOrUpdateEvent(e) {
+      console.log("addOrUpdateEvent", e);
+      e.forEach(event => {
+        if (typeof this.selectedEvent.start !== "undefined") {
+          console.log("start update", event);
+          this.updateEvent(event);
+        } else {
+          this.events.push(event);
+          db.collection("calEvent")
             .add({
-              name: this.name,
-              details: this.details,
-              start: start,
-              end: end,
-              color: this.color
+              name: event.name,
+              details: event.details,
+              start: event.start,
+              end: event.end,
+              color: event.color
             })
             .then(() => {
               console.log("add done");
             });
         }
-      }
+      });
     },
+
     addOneEvent() {
-      db.collection("calEvent3")
+      db.collection("calEvent")
         .add({
           name: this.name,
           details: this.details,
@@ -564,8 +538,13 @@ export default {
     },
     updateEvent(ev) {
       console.log(ev);
-      db.collection("calEvent3")
-        .doc(ev.id)
+      let id =
+        typeof this.selectedEvent.start !== "undefined"
+          ? this.selectedEvent.id
+          : ev.id;
+      console.log(this.selectedEvent);
+      db.collection("calEvent")
+        .doc(id)
         .update({
           name: ev.name,
           details: ev.details,
@@ -578,29 +557,15 @@ export default {
           this.selectedOpen = false;
           this.currentlyEditing = null;
         });
-      // axios
-      //   .post("api/add-event", {
-      //     check: true,
-      //     name: ev.name,
-      //     details: ev.details,
-      //     start: ev.start,
-      //     end: ev.end,
-      //     color: ev.color,
-      //     id: ev.id,
-      //     user_id: 1
-      //   })
-      //   .then(response => {
-      //     this.selectedOpen = false;
-      //     this.currentlyEditing = null;
-      //     // console.log(response.data);
-      //   });
     },
     editEvent(id) {
       this.currentlyEditing = id;
+      this.checkMoreActionData = true;
+      this.selectedOpen = false;
     },
     deleteEvent(id) {
       if (window.confirm("Do you really want to delete?")) {
-        db.collection("calEvent3")
+        db.collection("calEvent")
           .doc(id)
           .delete()
           .then(() => {
@@ -612,12 +577,6 @@ export default {
             console.error(error);
           });
       }
-      // axios.post("api/delete/" + id).then(response => {
-      //   this.selectedOpen = false;
-      // this.events.forEach(item=>{
-      // })
-      // this.getEvents();
-      // });
     },
     showDateTime() {
       this.check = false;
@@ -643,28 +602,25 @@ export default {
     next() {
       this.$refs.calendar.next();
     },
-    showEvent({ nativeEvent, event }) {
+    showEvent({ event, nativeEvent }) {
       const open = () => {
-        // console.log(nativeEvent.target);
         this.selectedEvent = event;
         console.log(this.selectedEvent);
-
         this.selectedEvent.start = this.selectedEvent.start;
         this.selectedEvent.end = this.selectedEvent.end;
-        // console.log(this.selectedEvent);
         this.selectedElement = nativeEvent.target;
+        console.log("1", this.selectedElement);
         setTimeout(() => (this.selectedOpen = true), 10);
       };
-
       if (this.selectedOpen) {
         this.selectedOpen = false;
         setTimeout(open, 10);
       } else {
         open();
       }
-
       nativeEvent.stopPropagation();
     },
+
     updateRange({ start, end }) {
       this.start = start;
       this.end = end;
@@ -706,10 +662,14 @@ export default {
     },
     showAddEventOnSchedule(e) {
       console.log(e);
-      // this.sEvent = e.start.replace(" ", "T");
-      // this.endEvent = e.end.replace(" ", "T");
-      // this.showEvent({ nativeEvent, e });
-      // this.dialog = true;
+    },
+    closeEditEventDialog() {
+      this.checkMoreActionData = false;
+      // this.selectedEvent = {};
+    },
+    openDialogAddEvent() {
+      this.dialog = true;
+      this.selectedEvent = {};
     }
   }
 };

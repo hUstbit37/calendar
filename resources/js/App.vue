@@ -10,7 +10,9 @@
 // import Header from "./components/layout/Header.vue";
 export default {
   data() {
-    return {};
+    return {
+      drawer: null
+    };
   },
   components: {}
 };
