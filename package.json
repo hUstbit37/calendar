@@ -30,6 +30,6 @@
         "v-year-calendar": "^1.0.2",
         "vue-router": "^3.3.2",
         "vuefire": "^2.2.2",
-        "vuetify": "^2.2.32"
+        "vuetify": "^2.6.10"
     }
 }
